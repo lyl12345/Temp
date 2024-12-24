@@ -1,0 +1,55 @@
+void QtWave::SlotCreateVcd()
+{
+	if (_dump_file)
+	{
+		SelectAllTraces();
+		DeleteBuffer();
+		FreeCutBuffer();
+		g_object_unref(_dump_file);
+		_dump_file = nullptr;
+		GLOBALS->dump_file = nullptr;
+	}
+
+	QElapsedTimer timer;
+	timer.start();
+
+	GwLoader* loader = gw_vcd_loader_new();
+	GwVcdLoader* vcd_loader = GW_VCD_LOADER(loader);
+	//初始化
+	gw_vcd_loader_begin(vcd_loader);
+	gw_vcd_loader_set_timescale(vcd_loader, 1, GW_TIME_DIMENSION_NANO);
+	//创建组
+	gw_vcd_loader_scope(vcd_loader, GW_TREE_KIND_VCD_ST_MODULE, "variables");
+	//创建信号
+	gw_vcd_loader_var(vcd_loader, 15, 1, "!");
+	gw_vcd_parse_upscope(vcd_loader);
+	gw_vcd_parse_enddefinitions(vcd_loader);
+	//赋值时间
+	gw_vcd_add_time(vcd_loader, 0);
+	gw_vcd_add_signal_action(vcd_loader, "!", '0');
+	gw_vcd_add_time(vcd_loader, 1);
+	gw_vcd_add_signal_action(vcd_loader, "!", 'x');
+	gw_vcd_add_time(vcd_loader, 3);
+	gw_vcd_add_signal_action(vcd_loader, "!", '1');
+	_dump_file = gw_vcd_loader_end(vcd_loader);
+	g_object_unref(loader);
+
+	qDebug() << "t1:" << timer.nsecsElapsed();
+
+	GLOBALS->dump_file = _dump_file;
+	GLOBALS->pxns = 100;
+	GwTimeRange* range = gw_dump_file_get_time_range(_dump_file);
+	GLOBALS->tims.first = gw_time_range_get_start(range);
+	GLOBALS->tims.last = gw_time_range_get_end(range);
+	GLOBALS->tims.start = 0;
+	GLOBALS->tims.end = ceil(ui.plot->axisRect()->width() / GLOBALS->pxns);
+
+	GwFacs* facs = gw_dump_file_get_facs(_dump_file);
+	for (guint i = 0; i < gw_facs_get_length(facs); i++) {
+		GwSymbol* symbol = gw_facs_get(facs, i);
+		AddNode(symbol->n, symbol->name);
+	}
+	_wave_item->SetTrace(GLOBALS->traces.first);
+
+	UpdateSignalList();
+}
